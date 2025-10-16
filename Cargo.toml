@@ -1,0 +1,16 @@
+[package]
+name = "swh-test"
+version = "0.0.1"
+edition = "2024"
+
+[features]
+deprecated-binaries = []  # build old, deprecated binaries
+ # Specify custom path
+
+
+[dependencies]
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
+swh-graph = { version = "8.0.10", features = ["serde"] }
+swh-graph-stdlib = "8.0.10"
+
