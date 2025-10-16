@@ -1,29 +1,35 @@
 
-use std::path::PathBuf;
 mod utils;
 mod graph;
+mod origin;
 
-use std::fs;
-use swh_graph::graph::*;
+use graph::Graph;
 
-
-fn main() {
-
-    let base_name ="/home/sandbox/graph/2024-08-23-popular-500-python/graph";
-    let graph = swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(PathBuf::from(base_name))
-    .expect("Could not load graph");
-    println!("Graph loaded with {} nodes and {} arcs", graph.num_nodes(), graph.num_arcs());
-    let origins_list_file = "origin.bin";
-
-
-    if !fs::exists(&origins_list_file).unwrap() {
-        let origins = graph::collect_origins(&graph);
-        utils::write_node_ids(&PathBuf::from(&origins_list_file), &origins);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let graph_path = "/home/sandbox/graph/2024-08-23-popular-500-python/graph";
+    
+    // Create and load the graph
+    let mut graph = Graph::new(graph_path)?;
+    
+    // Print graph statistics
+    let (num_nodes, num_arcs) = graph.stats();
+    println!("Graph loaded with {} nodes and {} arcs", num_nodes, num_arcs);
+    
+    // Get origins (will automatically load if not cached)
+    let origins = graph.get_origins()?;
+    println!("Found {} origins", origins.len());
+    
+    // Print the first 10 origins with URLs
+    println!("\nFirst 10 origins:");
+    for origin in origins.iter().take(10) {
+        if let Some(url) = origin.get_url() {
+            println!("  {}:{} -> {}", origin.id(),origin.swhid(), url);
+        } else {
+            println!("  {}:{} -> (no URL)", origin.id(),origin.swhid());
+        }
     }
-
-    utils::read_node_ids(&PathBuf::from(origins_list_file));
-
-
+    
+    Ok(())
 }
 
 
