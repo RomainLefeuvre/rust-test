@@ -1,19 +1,24 @@
 use std::rc::Rc;
-use swh_graph::NodeType;
-use swh_graph::graph::SwhGraphWithProperties;
-use crate::graph::GraphType;
+use swh_graph::mph::DynMphf;
+use swh_graph::properties::{MappedContents, MappedLabelNames, MappedMaps, MappedPersons, MappedStrings, MappedTimestamps};
+use swh_graph::{NodeType, SwhGraphProperties};
+use swh_graph::graph::{NodeId, SwhBidirectionalGraph, SwhForwardGraph, SwhGraphWithProperties};
 
 /// Represents an origin node in the Software Heritage graph
-pub struct Origin {
+pub struct Origin <G>
+where
+    G: SwhForwardGraph {
     /// Internal node ID of the origin
     id: usize,
     /// Reference-counted pointer to the graph containing this origin
-    graph: Rc<GraphType>,
+     graph: Rc<G> ,
 }
 
-impl Origin {
+impl <G> Origin<G>
+where
+    G: SwhForwardGraph {
     /// Create a new Origin from a node ID and graph reference
-    pub fn new(id: usize, graph: Rc<GraphType>) -> Self {
+    pub fn new(id: usize, graph:Rc<G>    ) -> Self {
         Origin { id, graph }
     }
     
@@ -24,6 +29,7 @@ impl Origin {
     
     /// Get the URL of this origin from the graph properties
     pub fn get_url(&self) -> Option<String> {
+        self.graph.
         let props = self.graph.properties();
         
         // Verify this is actually an origin node
@@ -42,6 +48,13 @@ impl Origin {
         props.swhid(self.id).to_string()
     }
 
+    pub fn get_latest_snapshot(&self) -> Option<(NodeId, u64)>{
+        let props = self.graph.properties();
+        if props.node_type(self.id) != NodeType::Origin {
+            return None;
+        }
+        return swh_graph_stdlib::find_latest_snp(self.graph.as_ref(), self.id).ok().flatten();
+    }
 
     
 }
