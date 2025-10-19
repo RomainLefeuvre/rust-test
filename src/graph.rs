@@ -8,7 +8,7 @@ use crate::origin::Origin;
 
 pub struct Graph<G>
 where
-    G: SwhForwardGraph, {
+    G: SwhFullGraph, {
     graph: Rc<G>,
     base_path: PathBuf,
     origins_cache_file: PathBuf,
@@ -17,17 +17,17 @@ where
 
 impl <G> Graph<G>
 where
-    G: SwhForwardGraph {
+    G: SwhFullGraph {
     /// Crée un nouveau Graph à partir du chemin du graphe
-    pub fn new<P: Into<PathBuf>>(graph_path: P) -> Graph<impl SwhForwardGraph> {
+    pub fn new<P: Into<PathBuf>>(graph_path: P) -> Graph<impl SwhFullGraph> {
         let base_path = graph_path.into();
 
         let mut origins_cache_file = base_path.clone();
         origins_cache_file.set_file_name("origins.bin");
 
         // Ici on utilise le type concret SwhUnidirectionalGraph
-        let graph = swh_graph::graph::SwhUnidirectionalGraph::new(&base_path).unwrap();
-        
+        //let graph = swh_graph::graph::SwhUnidirectionalGraph::new(&base_path).unwrap();
+        let graph = swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap();
         Graph {
             graph: Rc::new(graph),
             base_path,
@@ -44,7 +44,7 @@ where
     
     /// Get origins, automatically loading if not already loaded
     /// Returns a reference to the Vec of Origin objects
-    pub fn get_origins(&mut self) -> Result<&Vec<Origin<G>, Box<dyn std::error::Error>> {
+    pub fn get_origins(&mut self) -> Result<&Vec<Origin<G>>, Box<dyn std::error::Error>> {
         if self.origins.is_none() {
             let origin_ids = self.get_or_compute_origin_ids()?;
             let origins = origin_ids.iter()

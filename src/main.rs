@@ -1,15 +1,16 @@
+use crate::graph::Graph;
+
 
 mod utils;
-mod graph;
 mod origin;
+mod graph;
 
-use graph::Graph;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let graph_path = "/home/sandbox/graph/2024-08-23-popular-500-python/graph";
     
     // Create and load the graph
-    let mut graph = Graph::new(graph_path)?;
+    let mut graph = Graph::< >::new(graph_path);
     
     // Print graph statistics
     let (num_nodes, num_arcs) = graph.stats();

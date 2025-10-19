@@ -1,13 +1,11 @@
 use std::rc::Rc;
-use swh_graph::mph::DynMphf;
-use swh_graph::properties::{MappedContents, MappedLabelNames, MappedMaps, MappedPersons, MappedStrings, MappedTimestamps};
-use swh_graph::{NodeType, SwhGraphProperties};
-use swh_graph::graph::{NodeId, SwhBidirectionalGraph, SwhForwardGraph, SwhGraphWithProperties};
+use swh_graph::{NodeType};
+use swh_graph::graph::{NodeId, SwhFullGraph, SwhGraphWithProperties};
 
 /// Represents an origin node in the Software Heritage graph
 pub struct Origin <G>
 where
-    G: SwhForwardGraph {
+    G: SwhFullGraph {
     /// Internal node ID of the origin
     id: usize,
     /// Reference-counted pointer to the graph containing this origin
@@ -16,7 +14,7 @@ where
 
 impl <G> Origin<G>
 where
-    G: SwhForwardGraph {
+    G: SwhFullGraph {
     /// Create a new Origin from a node ID and graph reference
     pub fn new(id: usize, graph:Rc<G>    ) -> Self {
         Origin { id, graph }
@@ -29,7 +27,6 @@ where
     
     /// Get the URL of this origin from the graph properties
     pub fn get_url(&self) -> Option<String> {
-        self.graph.
         let props = self.graph.properties();
         
         // Verify this is actually an origin node
@@ -59,7 +56,9 @@ where
     
 }
 
-impl std::fmt::Debug for Origin {
+impl <G> std::fmt::Debug for Origin<G> where
+    G: SwhFullGraph,
+ {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Origin")
             .field("id", &self.id)
@@ -68,8 +67,9 @@ impl std::fmt::Debug for Origin {
     }
 }
 
-impl std::fmt::Display for Origin {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl <G> std::fmt::Display for Origin<G> where
+    G: SwhFullGraph,
+ {    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.get_url() {
             Some(url) => write!(f, "Origin({})", url),
             None => write!(f, "Origin(id={})", self.id),
