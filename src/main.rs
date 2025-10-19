@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Graph loaded with {} nodes and {} arcs", num_nodes, num_arcs);
     
     // Get origins (will automatically load if not cached)
-    let origins = graph.get_origins()?;
+    let origins = graph.get_origins_mut()?;
     println!("Found {} origins", origins.len());
     
     // Print the first 10 origins with URLs
@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //print all the latest commit date for the first 10 origins as ISO 8601 date
     println!("\nLatest commit dates for first 10 origins:");
-    for origin in origins.iter().take(10) {
+    for origin in origins.iter_mut().take(10) {
         if let Some(timestamp) = origin.get_latest_commit_date() {
             let datetime = chrono::NaiveDateTime::from_timestamp(timestamp as i64, 0);
             let iso_date = datetime.format("%Y-%m-%d %H:%M)").to_string();
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //Count accessible revisions from the latest snapshot for the first 10 origins
     println!("\nAccessible revisions from latest snapshot for first 10 origins:");
-    for origin in origins.iter().take(10) {
+    for origin in origins.iter_mut().take(10) {
         if let Some(count) = origin.total_commit_latest_snp() {
             println!("  Origin {}:{} -> Accessible Revisions from Latest Snapshot: {}", origin.id(),origin.swhid(), count);
         } else {
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //Count unique commiters from the latest snapshot for the first 10 origins
     println!("\nUnique commiters from latest snapshot for first 10 origins:");
-    for origin in origins.iter().take(10) {     
+    for origin in origins.iter_mut().take(10) {     
         if let Some(count) = origin.total_commiter_latest_snp() {
             println!("  Origin {}:{} -> Unique Commiters from Latest Snapshot: {}", origin.id(),origin.swhid(), count);
         } else {

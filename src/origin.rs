@@ -1,8 +1,10 @@
 use std::rc::Rc;
-use swh_graph::NodeType;
+use swh_graph::{ NodeType};
 use swh_graph::graph::{NodeId, SwhFullGraph, SwhGraphWithProperties};
+use serde::{Serialize, Deserialize};
 
 /// Represents an origin node in the Software Heritage graph
+#[derive(Serialize, Deserialize)]
 pub struct Origin<G>
 where
     G: SwhFullGraph,
@@ -10,11 +12,21 @@ where
     /// Internal node ID of the origin
     id: usize,
     /// Reference-counted pointer to the graph containing this origin
+    #[serde(skip)]
+    #[serde(default = "default_graph")]
     graph: Rc<G>,
 
     latest_commit_date: Option<usize>,
     number_of_commits: Option<usize>,
     number_of_commiters: Option<usize>,
+}
+
+// Helper function to provide a default value for graph during deserialization
+// This will be replaced with the actual graph reference after deserialization
+fn default_graph<G: SwhFullGraph>() -> Rc<G> {
+    // We can't create a real graph here, so we'll use an empty Rc
+    // that will be replaced immediately after deserialization
+    unsafe { std::mem::zeroed() }
 }
 
 impl<G> Origin<G>
@@ -31,6 +43,11 @@ where
             number_of_commiters: None,
             
         }
+    }
+
+    /// Set the graph reference (used after deserialization)
+    pub fn set_graph(&mut self, graph: Rc<G>) {
+        self.graph = graph;
     }
 
     /// Get the internal node ID of this origin
