@@ -56,6 +56,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Origin {}:{} -> No commit date found", origin.id(),origin.swhid());
         }
     }
+
+    //Count accessible revisions from the latest snapshot for the first 10 origins
+    println!("\nAccessible revisions from latest snapshot for first 10 origins:");
+    for origin in origins.iter().take(10) {
+        if let Some(count) = origin.total_commit_latest_snp() {
+            println!("  Origin {}:{} -> Accessible Revisions from Latest Snapshot: {}", origin.id(),origin.swhid(), count);
+        } else {
+            println!("  Origin {}:{} -> No accessible revisions found for latest snapshot", origin.id(),origin.swhid());
+        }   
+    }
+
+    //Count unique commiters from the latest snapshot for the first 10 origins
+    println!("\nUnique commiters from latest snapshot for first 10 origins:");
+    for origin in origins.iter().take(10) {     
+        if let Some(count) = origin.total_commiter_latest_snp() {
+            println!("  Origin {}:{} -> Unique Commiters from Latest Snapshot: {}", origin.id(),origin.swhid(), count);
+        } else {
+            println!("  Origin {}:{} -> No unique commiters found for latest snapshot", origin.id(),origin.swhid());
+        }   
+    }
+    
     Ok(())
 }
 
