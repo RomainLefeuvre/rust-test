@@ -4,7 +4,7 @@ use std::io::{BufReader, BufWriter};
 use std::rc::Rc;
 use swh_graph::{graph::*, NodeType };
 use crate::utils::filter_by_node_type;
-use crate::origin::Origin;
+use crate::origin::{Origin, OriginData};
 use serde_json;
 
 
@@ -45,14 +45,14 @@ where
     /// Returns a reference to the Vec of Origin objects
     pub fn get_origins(&mut self) -> Result<&Vec<Origin<G>>, std::io::Error> {
         if self.origins.is_none() {
-            self.origins = Some(self.load_or_compute_origins()?);
+            self.load_or_compute_origins();
         }
         Ok(self.origins.as_ref().unwrap())
     }
     
      pub fn get_origins_mut(&mut self) -> Result<&mut Vec<Origin<G>>, std::io::Error> {
         if self.origins.is_none() {
-            self.origins = Some(self.load_or_compute_origins()?);
+           self.load_or_compute_origins();
         }
         Ok(self.origins.as_mut().unwrap())
     }
@@ -60,40 +60,42 @@ where
     
     
     // Private helper methods
-    fn load_or_compute_origins(&self) -> Result<Vec<Origin<G>>, std::io::Error> {
+    fn load_or_compute_origins(&mut self)  {
         if fs::metadata(&self.origins_cache_file).is_ok() {
             println!("Loading origins from cache: {:?}", self.origins_cache_file);
             self.load_origins_from_file()
         } else {
             println!("Computing origins and caching to: {:?}", self.origins_cache_file);
             let origins = self.compute_origins();
-            self.save_origins_to_file(&origins)?;
-            Ok(origins)
+            self.save_origins_to_file();
+            
         }
+        
     }
     
-    fn load_origins_from_file(&self) -> Result<Vec<Origin<G>>, std::io::Error> {
-        let file = File::open(&self.origins_cache_file)?;
+    fn load_origins_from_file(&mut self)  {
+        let file = File::open(&self.origins_cache_file).unwrap();
         let reader = BufReader::new(file);
         
         // Deserialize the Origin objects (without graph reference)
-        let mut origins: Vec<Origin<G>> = serde_json::from_reader(reader)?
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let origins_data: Vec<OriginData> = serde_json::from_reader(reader)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            .unwrap();
         
-        // Set the graph reference for each origin (it was skipped during serialization)
-        for origin in origins.iter_mut() {
-            origin.set_graph(self.graph.clone());
-        }
-        
-        Ok(origins)
+        //map to Origin<G> by setting the graph reference
+        let origins: Vec<Origin<G>> = origins_data.into_iter()
+            .map(|data| Origin::from_data(data, self.graph.clone()))
+            .collect();
+        self.origins = Some(origins);
+   
     }
     
-    fn save_origins_to_file(&self, origins: &Vec<Origin<G>>) -> Result<(), std::io::Error> {
+    pub fn save_origins_to_file(&self) -> Result<(), std::io::Error> {
         let file = File::create(&self.origins_cache_file)?;
         let writer = BufWriter::new(file);
         
         // Serialize only the IDs (Origin implements Serialize which skips the graph field)
-        serde_json::to_writer_pretty(writer, origins)
+        serde_json::to_writer_pretty(writer, &self.origins)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
     

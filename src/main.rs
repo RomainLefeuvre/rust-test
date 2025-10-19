@@ -1,28 +1,41 @@
+use crate::graph::Graph;
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use std::path::PathBuf;
 
-use crate::graph::Graph;
-
-
-mod utils;
-mod origin;
 mod graph;
-
+mod origin;
+mod utils;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let graph_path = "/home/sandbox/graph/2024-08-23-popular-500-python/graph";
-    let base_path:PathBuf = graph_path.into();
+    let base_path: PathBuf = graph_path.into();
 
     // Create and load the graph
-    let mut graph = Graph::<>::new(graph_path,swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap());
-    
+    let mut graph = Graph::new(
+        graph_path,
+        swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap(),
+    );
+
     // Print graph statistics
     let (num_nodes, num_arcs) = graph.stats();
-    println!("Graph loaded with {} nodes and {} arcs", num_nodes, num_arcs);
-    
-    // // Get origins (will automatically load if not cached)
-     let origins = graph.get_origins_mut()?;
+    println!(
+        "Graph loaded with {} nodes and {} arcs",
+        num_nodes, num_arcs
+    );
+
+    // Get origins (will automatically load if not cached)
+    let origins = graph.get_origins_mut()?;
+    println!("Found {} origins", origins.len());
+
+    // Compute all data with progress bar
+    for origin in origins.iter_mut().progress() {
+        origin.compute_data();
+    }
+
+    graph.save_origins_to_file();
+
     // println!("Found {} origins", origins.len());
-    
+
     // // Print the first 10 origins with URLs
     // println!("\nFirst 10 origins:");
     // for origin in origins.iter().take(10) {
@@ -32,7 +45,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //         println!("  {}:{} -> (no URL)", origin.id(),origin.swhid());
     //     }
     // }
-
 
     // //print all head revisions of the latest snapshots for the first 10 origins
     // println!("\nAll head revisions of the latest snapshots for first 10 origins:");
@@ -64,23 +76,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //         println!("  Origin {}:{} -> Accessible Revisions from Latest Snapshot: {}", origin.id(),origin.swhid(), count);
     //     } else {
     //         println!("  Origin {}:{} -> No accessible revisions found for latest snapshot", origin.id(),origin.swhid());
-    //     }   
+    //     }
     // }
 
     // //Count unique commiters from the latest snapshot for the first 10 origins
     // println!("\nUnique commiters from latest snapshot for first 10 origins:");
-    // for origin in origins.iter_mut().take(10) {     
+    // for origin in origins.iter_mut().take(10) {
     //     if let Some(count) = origin.total_commiter_latest_snp() {
     //         println!("  Origin {}:{} -> Unique Commiters from Latest Snapshot: {}", origin.id(),origin.swhid(), count);
     //     } else {
     //         println!("  Origin {}:{} -> No unique commiters found for latest snapshot", origin.id(),origin.swhid());
-    //     }   
+    //     }
     // }
-    
+
     Ok(())
 }
-
-
-
-
-

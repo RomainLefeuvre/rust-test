@@ -1,7 +1,17 @@
 use std::rc::Rc;
+use serde::de::DeserializeSeed;
 use swh_graph::{ NodeType};
 use swh_graph::graph::{NodeId, SwhFullGraph, SwhGraphWithProperties};
 use serde::{Serialize, Deserialize};
+
+/// Serializable data for Origin (without graph reference)
+#[derive(Serialize, Deserialize)]
+pub struct OriginData {
+    pub id: usize,
+    pub latest_commit_date: Option<usize>,
+    pub number_of_commits: Option<usize>,
+    pub number_of_commiters: Option<usize>,
+}
 
 /// Represents an origin node in the Software Heritage graph
 #[derive(Serialize, Deserialize)]
@@ -48,8 +58,39 @@ where
     pub fn set_graph(&mut self, graph: Rc<G>) {
         self.graph = Some(graph);
     }
+    
     pub fn get_graph(&self) -> Rc<G> {
         return self.graph.as_ref().unwrap().clone();
+    }
+    
+    /// Convert Origin to OriginData (without graph reference)
+    pub fn to_data(&self) -> OriginData {
+        OriginData {
+            id: self.id,
+            latest_commit_date: self.latest_commit_date,
+            number_of_commits: self.number_of_commits,
+            number_of_commiters: self.number_of_commiters,
+        }
+    }
+    
+    /// Create Origin from OriginData and graph reference
+    pub fn from_data(data: OriginData, graph: Rc<G>) -> Self {
+        Origin {
+            id: data.id,
+            graph: Some(graph),
+            latest_commit_date: data.latest_commit_date,
+            number_of_commits: data.number_of_commits,
+            number_of_commiters: data.number_of_commiters,
+        }
+    }
+    
+    pub fn compute_data(&mut self) {
+        // Compute latest commit date
+        self.get_latest_commit_date();
+        // Compute total number of commits
+        self.total_commit_latest_snp();
+        // Compute total number of commiters
+        self.total_commiter_latest_snp();
     }
     /// Get the internal node ID of this origin
     pub fn id(&self) -> usize {
@@ -189,14 +230,3 @@ where
     }
 }
 
-impl<G> std::fmt::Display for Origin<G>
-where
-    G: SwhFullGraph,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.get_url() {
-            Some(url) => write!(f, "Origin({})", url),
-            None => write!(f, "Origin(id={})", self.id),
-        }
-    }
-}
