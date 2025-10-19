@@ -77,7 +77,7 @@ where
         let reader = BufReader::new(file);
         
         // Deserialize the Origin objects (without graph reference)
-        let mut origins: Vec<Origin<G>> = serde_json::from_reader(reader)
+        let mut origins: Vec<Origin<G>> = serde_json::from_reader(reader)?
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         
         // Set the graph reference for each origin (it was skipped during serialization)

@@ -7,14 +7,13 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize)]
 pub struct Origin<G>
 where
-    G: SwhFullGraph,
+    G: SwhFullGraph ,
 {
     /// Internal node ID of the origin
     id: usize,
     /// Reference-counted pointer to the graph containing this origin
     #[serde(skip)]
-    #[serde(default = "default_graph")]
-    graph: Rc<G>,
+    graph: Option<Rc<G>>,
 
     latest_commit_date: Option<usize>,
     number_of_commits: Option<usize>,
@@ -37,7 +36,7 @@ where
     pub fn new(id: usize, graph: Rc<G>) -> Self {
         Origin {
             id: id,
-            graph: graph,
+            graph: Some(graph),
             latest_commit_date: None,
             number_of_commits: None,
             number_of_commiters: None,
@@ -47,9 +46,11 @@ where
 
     /// Set the graph reference (used after deserialization)
     pub fn set_graph(&mut self, graph: Rc<G>) {
-        self.graph = graph;
+        self.graph = Some(graph);
     }
-
+    pub fn get_graph(&self) -> Rc<G> {
+        return self.graph.as_ref().unwrap().clone();
+    }
     /// Get the internal node ID of this origin
     pub fn id(&self) -> usize {
         self.id
@@ -57,7 +58,8 @@ where
 
     /// Get the URL of this origin from the graph properties
     pub fn get_url(&self) -> Option<String> {
-        let props = self.graph.properties();
+        let binding = self.get_graph();
+        let props = binding.properties();
 
         // Verify this is actually an origin node
         if props.node_type(self.id) != NodeType::Origin {
@@ -72,16 +74,18 @@ where
 
     /// Get the SWHID string for this origin
     pub fn swhid(&self) -> String {
-        let props = self.graph.properties();
+        let graph = self.get_graph();
+        let props = graph.properties();
         props.swhid(self.id).to_string()
     }
 
     pub fn get_latest_snapshot(&self) -> Option<(NodeId, u64)> {
-        let props = self.graph.properties();
+        let graph = self.get_graph();
+        let props = graph.properties();
         if props.node_type(self.id) != NodeType::Origin {
             return None;
         }
-        return swh_graph_stdlib::find_latest_snp(self.graph.as_ref(), self.id)
+        return swh_graph_stdlib::find_latest_snp(graph.as_ref(), self.id)
             .ok()
             .flatten();
     }
@@ -90,8 +94,9 @@ where
         if self.number_of_commits.is_none() {
             let snapshot = self.get_latest_snapshot()?;
             let snapshot_id = snapshot.0;
-            let count = swh_graph_stdlib::iter_nodes(&self.graph, &[snapshot_id])
-                .filter(|&node| self.graph.properties().node_type(node) == NodeType::Revision)
+            let graph = self.get_graph();
+            let count = swh_graph_stdlib::iter_nodes(&graph, &[snapshot_id])
+                .filter(|&node| graph.properties().node_type(node) == NodeType::Revision)
                 .count();
 
             self.number_of_commits = count.into()
@@ -101,14 +106,15 @@ where
 
     pub fn total_commiter_latest_snp(&mut self) -> Option<usize> {
         //Check wether the value is not computed yet
+        let graph = self.get_graph();
         if self.number_of_commiters.is_none() {
             let snapshot = self.get_latest_snapshot()?;
 
             let snapshot_id = snapshot.0;
-            let count = swh_graph_stdlib::iter_nodes(&self.graph, &[snapshot_id])
-                .filter(|&node| self.graph.properties().node_type(node) == NodeType::Revision)
+            let count = swh_graph_stdlib::iter_nodes(&graph, &[snapshot_id])
+                .filter(|&node| graph.properties().node_type(node) == NodeType::Revision)
                 .filter_map(|rev| {
-                    self.graph
+                    graph
                         .properties()
                         .committer_id(rev)
                         .map(|ts| ts as u64)
@@ -122,11 +128,12 @@ where
     }
 
     pub fn get_latest_commit_date(&mut self) -> Option<usize> {
+        let graph = self.get_graph();
         if self.latest_commit_date.is_none() {
             let revisions = self.get_all_latest_snapshots_revisions();
             let mut max_date: Option<usize> = None;
             for rev in revisions {
-                let props = self.graph.properties();
+                let props = graph.properties();
                 let commit_date = props.committer_timestamp(rev);
                 if let Some(date) = commit_date {
                     if let Some(max) = max_date {
@@ -147,15 +154,16 @@ where
     //Get all head revision of the latest snapshots
     pub fn get_all_latest_snapshots_revisions(&self) -> Vec<NodeId> {
         let latest_snapshots: (NodeId, u64) = self.get_latest_snapshot().unwrap();
+        let graph = self.get_graph();
         let mut revisions: Vec<NodeId> = Vec::new();
-        for succ in self.graph.successors(latest_snapshots.0) {
-            let node_type = self.graph.properties().node_type(succ);
+        for succ in graph.successors(latest_snapshots.0) {
+            let node_type = graph.properties().node_type(succ);
             if node_type == NodeType::Revision {
                 revisions.push(succ);
             } else if node_type == NodeType::Release {
                 //get all revisions linked to this release
-                for rel_succ in self.graph.successors(succ) {
-                    let rel_node_type = self.graph.properties().node_type(rel_succ);
+                for rel_succ in graph.successors(succ) {
+                    let rel_node_type = graph.properties().node_type(rel_succ);
                     if rel_node_type == NodeType::Revision {
                         revisions.push(rel_succ);
                     }
