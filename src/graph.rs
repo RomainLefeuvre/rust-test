@@ -18,16 +18,16 @@ where
 impl <G> Graph<G>
 where
     G: SwhFullGraph {
-    /// Crée un nouveau Graph à partir du chemin du graphe
-    pub fn new<P: Into<PathBuf>>(graph_path: P) -> Graph<impl SwhFullGraph> {
-        let base_path = graph_path.into();
+    
+    pub fn new<P: Into<PathBuf>>(graph_path: P,graph : G) -> Graph<impl SwhFullGraph> {
+        let base_path:PathBuf = graph_path.into();
 
         let mut origins_cache_file = base_path.clone();
         origins_cache_file.set_file_name("origins.bin");
 
         // Ici on utilise le type concret SwhUnidirectionalGraph
         //let graph = swh_graph::graph::SwhUnidirectionalGraph::new(&base_path).unwrap();
-        let graph = swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap();
+        //let graph = swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap();
         Graph {
             graph: Rc::new(graph),
             base_path,
@@ -44,7 +44,7 @@ where
     
     /// Get origins, automatically loading if not already loaded
     /// Returns a reference to the Vec of Origin objects
-    pub fn get_origins(&mut self) -> Result<&Vec<Origin<G>>, Box<dyn std::error::Error>> {
+    pub fn get_origins(&mut self) -> Result<&Vec<Origin<G>>, std::io::Error> {
         if self.origins.is_none() {
             let origin_ids = self.get_or_compute_origin_ids()?;
             let origins = origin_ids.iter()
@@ -55,9 +55,11 @@ where
         Ok(self.origins.as_ref().unwrap())
     }
     
+
+    
     
     // Private helper methods
-    fn get_or_compute_origin_ids(&self) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
+    fn get_or_compute_origin_ids(&self) -> Result<Vec<usize>, std::io::Error> {
         if fs::exists(&self.origins_cache_file).unwrap_or(false) {
             println!("Loading origins from cache: {:?}", self.origins_cache_file);
             Ok(read_node_ids(&self.origins_cache_file)?)
@@ -72,6 +74,8 @@ where
     fn compute_origin_ids(&self) -> Vec<usize> {
         filter_by_node_type(&self.graph, NodeType::Origin)
     }
+
+
 }
 
 

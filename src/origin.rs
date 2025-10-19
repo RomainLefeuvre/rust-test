@@ -53,6 +53,53 @@ where
         return swh_graph_stdlib::find_latest_snp(self.graph.as_ref(), self.id).ok().flatten();
     }
 
+
+    pub fn get_latest_commit_date(&self) -> Option<u64>{
+        //iterate over get_all_latest_snapshots_revisions and get the max commit date
+        let revisions = self.get_all_latest_snapshots_revisions();
+        let mut max_date:Option<u64> = None;
+        for rev in revisions {
+            let props = self.graph.properties();
+            let commit_date = props.committer_timestamp(rev);
+            if let Some(date) = commit_date {
+                if let Some(max) = max_date {
+                    if date > max.try_into().unwrap() {
+                        max_date = Some(date.try_into().unwrap());
+                    }
+                } 
+            }
+    }
+                return max_date;
+
+}
+
+    //Get all head revision of the latest snapshots
+    pub fn get_all_latest_snapshots_revisions(&self) -> Vec<NodeId>{
+        let latest_snapshots:(NodeId, u64) = self.get_latest_snapshot().unwrap();
+        let mut revisions:Vec<NodeId> = Vec::new();
+        for succ in self.graph.successors(latest_snapshots.0) {
+             let node_type = self.graph.properties().node_type(succ);
+                if node_type == NodeType::Revision {
+                    revisions.push(succ );
+                }else if node_type == NodeType::Release {
+                    //get all revisions linked to this release
+                    for rel_succ in self.graph.successors(succ) {
+                        let rel_node_type = self.graph.properties().node_type(rel_succ);
+                        if rel_node_type == NodeType::Revision {
+                            revisions.push(rel_succ );
+                        }
+                    }
+                }
+                else{
+                    //print the type for debugging
+                    println!("Successor {} is of type {:?}", succ, node_type);
+                }
+                
+        }
+        return revisions;
+        
+    }
+
     
 }
 
@@ -76,3 +123,5 @@ impl <G> std::fmt::Display for Origin<G> where
         }
     }
 }
+
+
