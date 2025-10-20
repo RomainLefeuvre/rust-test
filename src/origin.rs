@@ -1,6 +1,5 @@
-use serde::de::DeserializeSeed;
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
+use std::sync::Arc;
 use swh_graph::NodeType;
 use swh_graph::graph::{NodeId, SwhFullGraph, SwhGraphWithProperties};
 
@@ -17,13 +16,13 @@ pub struct OriginData {
 #[derive(Serialize, Deserialize)]
 pub struct Origin<G>
 where
-    G: SwhFullGraph,
+    G: SwhFullGraph + Send + Sync,
 {
     /// Internal node ID of the origin
     id: usize,
     /// Reference-counted pointer to the graph containing this origin
     #[serde(skip)]
-    graph: Option<Rc<G>>,
+    graph: Option<Arc<G>>,
 
     latest_commit_date: Option<usize>,
     number_of_commits: Option<usize>,
@@ -32,10 +31,10 @@ where
 
 impl<G> Origin<G>
 where
-    G: SwhFullGraph,
+    G: SwhFullGraph + Send + Sync,
 {
     /// Create a new Origin from a node ID and graph reference
-    pub fn new(id: usize, graph: Rc<G>) -> Self {
+    pub fn new(id: usize, graph: Arc<G>) -> Self {
         Origin {
             id: id,
             graph: Some(graph),
@@ -46,15 +45,17 @@ where
     }
 
     /// Set the graph reference (used after deserialization)
-    pub fn set_graph(&mut self, graph: Rc<G>) {
+    #[allow(dead_code)]
+    pub fn set_graph(&mut self, graph: Arc<G>) {
         self.graph = Some(graph);
     }
 
-    pub fn get_graph(&self) -> Rc<G> {
+    pub fn get_graph(&self) -> Arc<G> {
         return self.graph.as_ref().unwrap().clone();
     }
 
     /// Convert Origin to OriginData (without graph reference)
+    #[allow(dead_code)]
     pub fn to_data(&self) -> OriginData {
         OriginData {
             id: self.id,
@@ -65,7 +66,7 @@ where
     }
 
     /// Create Origin from OriginData and graph reference
-    pub fn from_data(data: OriginData, graph: Rc<G>) -> Self {
+    pub fn from_data(data: OriginData, graph: Arc<G>) -> Self {
         Origin {
             id: data.id,
             graph: Some(graph),
@@ -180,6 +181,8 @@ where
 
     //Get all head revision of the latest snapshots
     pub fn get_all_latest_snapshots_revisions(&self) -> Vec<NodeId> {
+        
+        
         let latest_snapshots: (NodeId, u64) = self.get_latest_snapshot().unwrap();
         let graph = self.get_graph();
         let mut revisions: Vec<NodeId> = Vec::new();
@@ -206,7 +209,7 @@ where
 
 impl<G> std::fmt::Debug for Origin<G>
 where
-    G: SwhFullGraph,
+    G: SwhFullGraph + Send + Sync,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Origin")

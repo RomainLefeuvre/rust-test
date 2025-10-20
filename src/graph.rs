@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
-use std::rc::Rc;
+use std::sync::Arc;
 use swh_graph::{graph::*, NodeType };
 use crate::utils::filter_by_node_type;
 use crate::origin::{Origin, OriginData};
@@ -10,8 +10,9 @@ use serde_json;
 
 pub struct Graph<G>
 where
-    G: SwhFullGraph, {
-    graph: Rc<G>,
+    G: SwhFullGraph + Send + Sync, {
+    graph: Arc<G>,
+    #[allow(dead_code)]
     base_path: PathBuf,
     origins_cache_file: PathBuf,
     origins: Option<Vec<Origin<G>>>,
@@ -19,7 +20,7 @@ where
 
 impl <G> Graph<G>
 where
-    G: SwhFullGraph {
+    G: SwhFullGraph + Send + Sync {
     
     pub fn new<P: Into<PathBuf>>(graph_path: P, graph: G) -> Self {
         let base_path: PathBuf = graph_path.into();
@@ -28,7 +29,7 @@ where
         origins_cache_file.set_file_name("origins.json");
 
         Graph {
-            graph: Rc::new(graph),
+            graph: Arc::new(graph),
             base_path,
             origins_cache_file,
             origins: None,
@@ -43,6 +44,7 @@ where
     
     /// Get origins, automatically loading if not already loaded
     /// Returns a reference to the Vec of Origin objects
+    #[allow(dead_code)]
     pub fn get_origins(&mut self) -> Result<&Vec<Origin<G>>, std::io::Error> {
         if self.origins.is_none() {
             self.load_or_compute_origins();
@@ -56,8 +58,6 @@ where
         }
         Ok(self.origins.as_mut().unwrap())
     }
-
-    
     
     // Private helper methods
     fn load_or_compute_origins(&mut self)  {
@@ -66,8 +66,8 @@ where
             self.load_origins_from_file()
         } else {
             println!("Computing origins and caching to: {:?}", self.origins_cache_file);
-            let origins = self.compute_origins();
-            self.save_origins_to_file();
+            let _origins = self.compute_origins();
+            let _ = self.save_origins_to_file();
             
         }
         
