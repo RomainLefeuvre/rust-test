@@ -8,6 +8,7 @@ use swh_graph::graph::{NodeId, SwhLabeledForwardGraph , SwhGraphWithProperties};
 #[derive(Serialize, Deserialize)]
 pub struct OriginData {
     pub id: usize,
+    pub url: Option<String>,
     pub latest_commit_date: Option<usize>,
     pub number_of_commits: Option<usize>,
     pub number_of_commiters: Option<usize>,
@@ -39,7 +40,7 @@ where
     /// Reference-counted pointer to the graph containing this origin
     #[serde(skip)]
     graph: Option<Arc<G>>,
-
+    url:Option<String>,
     latest_commit_date: Option<usize>,
     number_of_commits: Option<usize>,
     number_of_commiters: Option<usize>,
@@ -65,6 +66,7 @@ where
             latest_commit_date: None,
             number_of_commits: None,
             number_of_commiters: None,
+            url:None
         }
     }
 
@@ -80,13 +82,30 @@ where
 
     /// Convert Origin to OriginData (without graph reference)
     #[allow(dead_code)]
-    pub fn to_data(&self) -> OriginData {
+    pub fn to_data(&mut self) -> OriginData {
         OriginData {
             id: self.id,
             latest_commit_date: self.latest_commit_date,
             number_of_commits: self.number_of_commits,
             number_of_commiters: self.number_of_commiters,
+            url:  self.get_url(),
         }
+    }
+
+    pub fn get_url(&mut self) -> Option<String> {
+        let binding = self.get_graph();
+        let props = binding.properties();
+
+        // Verify this is actually an origin node
+        if props.node_type(self.id) != NodeType::Origin {
+            return None;
+        }
+
+        // For origin nodes, the URL is stored in the message field
+        self.url= props
+            .message(self.id)
+            .and_then(|bytes| String::from_utf8(bytes.to_vec()).ok());
+        return self.url.clone();
     }
 
     /// Create Origin from OriginData and graph reference
@@ -97,6 +116,7 @@ where
             latest_commit_date: data.latest_commit_date,
             number_of_commits: data.number_of_commits,
             number_of_commiters: data.number_of_commiters,
+            url: data.url,
         }
     }
 
@@ -107,27 +127,15 @@ where
         self.total_commit_latest_snp();
         // Compute total number of commiters
         self.total_commiter_latest_snp();
+        // Compute URL
+        self.get_url();
     }
     /// Get the internal node ID of this origin
     pub fn id(&self) -> usize {
         self.id
     }
 
-    /// Get the URL of this origin from the graph properties
-    pub fn get_url(&self) -> Option<String> {
-        let binding = self.get_graph();
-        let props = binding.properties();
 
-        // Verify this is actually an origin node
-        if props.node_type(self.id) != NodeType::Origin {
-            return None;
-        }
-
-        // For origin nodes, the URL is stored in the message field
-        props
-            .message(self.id)
-            .and_then(|bytes| String::from_utf8(bytes.to_vec()).ok())
-    }
 
     /// Get the SWHID string for this origin
     pub fn swhid(&self) -> String {
@@ -249,7 +257,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Origin")
             .field("id", &self.id)
-            .field("url", &self.get_url())
+            .field("url", &self.url)
             .finish()
     }
 }
