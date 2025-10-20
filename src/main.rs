@@ -1,5 +1,5 @@
 use crate::graph::Graph;
-use indicatif::{ProgressBar};
+use indicatif::{ProgressBar, ProgressIterator};
 use std::path::PathBuf;
 
 mod graph;
@@ -88,13 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
 
-     // Compute all data in parallel with progress bar
-    let pb = ProgressBar::new(origins.len() as u64);
-    for origin in origins.iter_mut() {
-        origin.compute_data();
-        pb.inc(1);
-    }
-    pb.finish();
+    // Compute all data with progress bar
+    origins.iter_mut().progress().for_each(|o| o.compute_data());
 
     graph.save_origins_to_file();
 

@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use serde::de::DeserializeSeed;
-use swh_graph::{ NodeType};
+use serde::{Deserialize, Serialize};
+use std::rc::Rc;
+use swh_graph::NodeType;
 use swh_graph::graph::{NodeId, SwhFullGraph, SwhGraphWithProperties};
-use serde::{Serialize, Deserialize};
 
 /// Serializable data for Origin (without graph reference)
 #[derive(Serialize, Deserialize)]
@@ -17,7 +17,7 @@ pub struct OriginData {
 #[derive(Serialize, Deserialize)]
 pub struct Origin<G>
 where
-    G: SwhFullGraph ,
+    G: SwhFullGraph,
 {
     /// Internal node ID of the origin
     id: usize,
@@ -28,14 +28,6 @@ where
     latest_commit_date: Option<usize>,
     number_of_commits: Option<usize>,
     number_of_commiters: Option<usize>,
-}
-
-// Helper function to provide a default value for graph during deserialization
-// This will be replaced with the actual graph reference after deserialization
-fn default_graph<G: SwhFullGraph>() -> Rc<G> {
-    // We can't create a real graph here, so we'll use an empty Rc
-    // that will be replaced immediately after deserialization
-    unsafe { std::mem::zeroed() }
 }
 
 impl<G> Origin<G>
@@ -50,7 +42,6 @@ where
             latest_commit_date: None,
             number_of_commits: None,
             number_of_commiters: None,
-            
         }
     }
 
@@ -58,11 +49,11 @@ where
     pub fn set_graph(&mut self, graph: Rc<G>) {
         self.graph = Some(graph);
     }
-    
+
     pub fn get_graph(&self) -> Rc<G> {
         return self.graph.as_ref().unwrap().clone();
     }
-    
+
     /// Convert Origin to OriginData (without graph reference)
     pub fn to_data(&self) -> OriginData {
         OriginData {
@@ -72,7 +63,7 @@ where
             number_of_commiters: self.number_of_commiters,
         }
     }
-    
+
     /// Create Origin from OriginData and graph reference
     pub fn from_data(data: OriginData, graph: Rc<G>) -> Self {
         Origin {
@@ -83,7 +74,7 @@ where
             number_of_commiters: data.number_of_commiters,
         }
     }
-    
+
     pub fn compute_data(&mut self) {
         // Compute latest commit date
         self.get_latest_commit_date();
@@ -154,12 +145,7 @@ where
             let snapshot_id = snapshot.0;
             let count = swh_graph_stdlib::iter_nodes(&graph, &[snapshot_id])
                 .filter(|&node| graph.properties().node_type(node) == NodeType::Revision)
-                .filter_map(|rev| {
-                    graph
-                        .properties()
-                        .committer_id(rev)
-                        .map(|ts| ts as u64)
-                })
+                .filter_map(|rev| graph.properties().committer_id(rev).map(|ts| ts as u64))
                 .collect::<std::collections::HashSet<u64>>()
                 .len();
 
@@ -229,4 +215,3 @@ where
             .finish()
     }
 }
-
