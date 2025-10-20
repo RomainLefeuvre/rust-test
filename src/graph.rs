@@ -7,6 +7,8 @@ use swh_graph::{graph::*, NodeType };
 use crate::utils::filter_by_node_type;
 use crate::origin::{Origin, OriginData};
 use serde_json;
+use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 
 
 pub struct Graph<G>
@@ -119,10 +121,25 @@ where
     
     fn compute_origins(&self) -> Vec<Origin<G>> {
         let origin_ids = filter_by_node_type(&self.graph, NodeType::Origin);
-        origin_ids.iter()
-            .map(|&id| Origin::new(id, self.graph.clone()))
-            .collect()
-
+        
+        // Create progress bar
+        let pb = Arc::new(ProgressBar::new(origin_ids.len() as u64));
+        pb.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+            .unwrap()
+            .progress_chars("#>-"));
+        pb.set_message("Computing origins");
+        
+        let origins: Vec<Origin<G>> = origin_ids.par_iter()
+            .map(|&id| {
+                let origin = Origin::new(id, self.graph.clone());
+                pb.inc(1);
+                origin
+            })
+            .collect();
+            
+        pb.finish_with_message("Origins computed!");
+        origins
     }
 
 
