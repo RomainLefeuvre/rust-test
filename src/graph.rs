@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::sync::Arc;
+use swh_graph::properties::{self};
 use swh_graph::{graph::*, NodeType };
 use crate::utils::filter_by_node_type;
 use crate::origin::{Origin, OriginData};
@@ -10,7 +11,16 @@ use serde_json;
 
 pub struct Graph<G>
 where
-    G: SwhFullGraph + Send + Sync, {
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync,
+{
     graph: Arc<G>,
     #[allow(dead_code)]
     base_path: PathBuf,
@@ -20,8 +30,16 @@ where
 
 impl <G> Graph<G>
 where
-    G: SwhFullGraph + Send + Sync {
-    
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync,
+{  
     pub fn new<P: Into<PathBuf>>(graph_path: P, graph: G) -> Self {
         let base_path: PathBuf = graph_path.into();
 

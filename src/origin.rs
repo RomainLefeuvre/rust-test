@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use swh_graph::properties::{self, Contents, LabelNames, Maps, Persons, Timestamps};
 use std::sync::Arc;
 use swh_graph::NodeType;
-use swh_graph::graph::{NodeId, SwhFullGraph, SwhGraphWithProperties};
+use swh_graph::graph::{NodeId, SwhLabeledForwardGraph , SwhGraphWithProperties};
 
 /// Serializable data for Origin (without graph reference)
 #[derive(Serialize, Deserialize)]
@@ -12,11 +13,26 @@ pub struct OriginData {
     pub number_of_commiters: Option<usize>,
 }
 
+
+//    type Maps: properties::MaybeMaps;
+//     type Timestamps: properties::MaybeTimestamps;
+//     type Persons: properties::MaybePersons;
+//     type Contents: properties::MaybeContents;
+//     type Strings: properties::MaybeStrings;
+//     type LabelNames: properties::MaybeLabelNames;
 /// Represents an origin node in the Software Heritage graph
 #[derive(Serialize, Deserialize)]
 pub struct Origin<G>
 where
-    G: SwhFullGraph + Send + Sync,
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync,
 {
     /// Internal node ID of the origin
     id: usize,
@@ -31,7 +47,15 @@ where
 
 impl<G> Origin<G>
 where
-    G: SwhFullGraph + Send + Sync,
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync,
 {
     /// Create a new Origin from a node ID and graph reference
     pub fn new(id: usize, graph: Arc<G>) -> Self {
@@ -212,7 +236,15 @@ where
 
 impl<G> std::fmt::Debug for Origin<G>
 where
-    G: SwhFullGraph + Send + Sync,
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Origin")

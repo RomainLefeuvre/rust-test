@@ -1,5 +1,6 @@
 use crate::graph::Graph;
 use rayon::prelude::*;
+use swh_graph::{graph::SwhUnidirectionalGraph, java_compat::mph::gov::GOVMPH, mph::DynMphf};
 use std::path::PathBuf;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::sync::Arc;
@@ -9,16 +10,18 @@ mod origin;
 mod utils;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let graph_path = "/home/sandbox/graph/2024-08-23-popular-500-python/graph";
+    let graph_path = "/home/sandbox/graph/partial/graph";
     let base_path: PathBuf = graph_path.into();
       // Get origins (will automatically load if not cached)
 
-
+    //#swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap()
+    let internal_graph = SwhUnidirectionalGraph::new(&base_path)?.load_all_properties::<DynMphf>()?.load_labels()?;
     
     // Create and load the graph
     let mut graph = Graph::new(
         graph_path,
-        swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap(),
+        internal_graph,
+        
     );
 
     // Print graph statistics
