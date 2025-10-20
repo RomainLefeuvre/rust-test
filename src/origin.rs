@@ -181,9 +181,12 @@ where
 
     //Get all head revision of the latest snapshots
     pub fn get_all_latest_snapshots_revisions(&self) -> Vec<NodeId> {
+        // Return empty vector if there's no latest snapshot
+        let latest_snapshots = match self.get_latest_snapshot() {
+            Some(snapshot) => snapshot,
+            None => return Vec::new(),
+        };
         
-        
-        let latest_snapshots: (NodeId, u64) = self.get_latest_snapshot().unwrap();
         let graph = self.get_graph();
         let mut revisions: Vec<NodeId> = Vec::new();
         for succ in graph.successors(latest_snapshots.0) {

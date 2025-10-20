@@ -66,7 +66,7 @@ where
             self.load_origins_from_file()
         } else {
             println!("Computing origins and caching to: {:?}", self.origins_cache_file);
-            let _origins = self.compute_origins();
+            self.origins= Some(self.compute_origins());
             let _ = self.save_origins_to_file();
             
         }
@@ -104,6 +104,7 @@ where
         origin_ids.iter()
             .map(|&id| Origin::new(id, self.graph.clone()))
             .collect()
+
     }
 
 

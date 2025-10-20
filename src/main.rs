@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pb = Arc::new(ProgressBar::new(origins.len() as u64));
 
     
-    origins.par_iter_mut().take(20).for_each(|o| {
+    origins.par_iter_mut().for_each(|o| {
         o.compute_data();
         pb.inc(1);
     });
