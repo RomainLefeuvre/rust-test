@@ -36,14 +36,14 @@ where
     > + Send + Sync,
 {
     /// Internal node ID of the origin
-    id: usize,
+    pub id: usize,
     /// Reference-counted pointer to the graph containing this origin
     #[serde(skip)]
-    graph: Option<Arc<G>>,
-    url:Option<String>,
-    latest_commit_date: Option<usize>,
-    number_of_commits: Option<usize>,
-    number_of_commiters: Option<usize>,
+    pub graph: Option<Arc<G>>,
+    pub url: Option<String>,
+    pub latest_commit_date: Option<usize>,
+    pub number_of_commits: Option<usize>,
+    pub number_of_commiters: Option<usize>,
 }
 
 impl<G> Origin<G>
@@ -126,9 +126,9 @@ where
         // Compute total number of commits
         self.total_commit_latest_snp();
         // Compute total number of commiters
-        self.total_commiter_latest_snp();
+        //self.total_commiter_latest_snp();
         // Compute URL
-        self.get_url();
+        //self.get_url();
     }
     /// Get the internal node ID of this origin
     pub fn id(&self) -> usize {
@@ -233,10 +233,11 @@ where
                         revisions.push(rel_succ);
                     }
                 }
-            } else {
-                //print the type for debugging
-                println!("Successor {} is of type {:?}", succ, node_type);
             }
+            // } else {
+            //     //print the type for debugging
+            //     println!("Warning : Successor {} is of type {:?}", succ, node_type);
+            // }
         }
         return revisions;
     }
