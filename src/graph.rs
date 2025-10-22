@@ -155,6 +155,15 @@ where
         self.origins = Some(origins);
         Ok(())
     }
+
+ pub fn filter_n_first_origins(&mut self, max_size: usize) {
+    if let Some(origins) = &mut self.origins {
+        if origins.len() > max_size {
+            origins.truncate(max_size);
+        }
+    }
+}
+
     
     pub fn save_origins_to_file(&self) -> Result<(), std::io::Error> {
         let file = File::create(&self.origins_cache_file)?;
@@ -200,14 +209,21 @@ where
         pb.set_message("Computing origins");
         
         let origins: Vec<Origin<G>> = origin_ids.par_iter()
-            .map(|&id| {
-                let origin = Origin::new(id, self.graph.clone());
+            .filter_map(|&id| {
+                let mut origin = Origin::new(id, self.graph.clone());
                 pb.inc(1);
-                origin
+                
+                // Filter out origins that don't have a latest snapshot
+                if origin.get_latest_snapshot().is_some() {
+                    Some(origin)
+                } else {
+                    None
+                }
             })
             .collect();
             
-        pb.finish_with_message("Origins computed!");
+        pb.finish_with_message("Origins computed! Check logs for count with snapshots");
+        println!("Found {} origins with snapshots out of {} total", origins.len(), origin_ids.len());
         origins
     }
 

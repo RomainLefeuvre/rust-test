@@ -88,7 +88,7 @@ where
             latest_commit_date: self.latest_commit_date,
             number_of_commits: self.number_of_commits,
             number_of_commiters: self.number_of_commiters,
-            url:  self.get_url(),
+            url:  self.url.clone(),
         }
     }
 
@@ -126,9 +126,9 @@ where
         // Compute total number of commits
         self.total_commit_latest_snp();
         // Compute total number of commiters
-        //self.total_commiter_latest_snp();
+        self.total_commiter_latest_snp();
         // Compute URL
-        //self.get_url();
+        self.get_url();
     }
     /// Get the internal node ID of this origin
     pub fn id(&self) -> usize {
@@ -144,7 +144,7 @@ where
         props.swhid(self.id).to_string()
     }
 
-    pub fn get_latest_snapshot(&self) -> Option<(NodeId, u64)> {
+    pub fn get_latest_snapshot(&mut self) -> Option<(NodeId, u64)> {
         let graph = self.get_graph();
         let props = graph.properties();
         if props.node_type(self.id) != NodeType::Origin {
@@ -163,6 +163,7 @@ where
             let count = swh_graph_stdlib::iter_nodes(&graph, &[snapshot_id])
                 .filter(|&node| graph.properties().node_type(node) == NodeType::Revision)
                 .count();
+
 
             self.number_of_commits = count.into()
         }
@@ -212,8 +213,8 @@ where
     }
 
     //Get all head revision of the latest snapshots
-    pub fn get_all_latest_snapshots_revisions(&self) -> Vec<NodeId> {
-        // Return empty vector if there's no latest snapshot
+    pub fn get_all_latest_snapshots_revisions(&mut self) -> Vec<NodeId> {
+        // Return empty vector if there's no latest snapshot    
         let latest_snapshots = match self.get_latest_snapshot() {
             Some(snapshot) => snapshot,
             None => return Vec::new(),
@@ -233,11 +234,8 @@ where
                         revisions.push(rel_succ);
                     }
                 }
-            }
-            // } else {
-            //     //print the type for debugging
-            //     println!("Warning : Successor {} is of type {:?}", succ, node_type);
-            // }
+            } 
+            
         }
         return revisions;
     }
