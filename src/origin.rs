@@ -144,7 +144,7 @@ where
         props.swhid(self.id).to_string()
     }
 
-    pub fn get_latest_snapshot(&mut self) -> Option<(NodeId, u64)> {
+    pub fn get_latest_snapshot(& self) -> Option<(NodeId, u64)> {
         let graph = self.get_graph();
         let props = graph.properties();
         if props.node_type(self.id) != NodeType::Origin {
@@ -168,6 +168,22 @@ where
             self.number_of_commits = count.into()
         }
         return self.number_of_commits;
+    }
+
+    pub fn total_commit_latest_snp_read_only(& self) -> Option<usize> {
+        if self.number_of_commits.is_none() {
+            let snapshot = self.get_latest_snapshot()?;
+            let snapshot_id = snapshot.0;
+            let graph = self.get_graph();
+            let count = swh_graph_stdlib::iter_nodes(&graph, &[snapshot_id])
+                .filter(|&node| graph.properties().node_type(node) == NodeType::Revision)
+                .count();
+            return    count.into()
+        }
+        return self.number_of_commits;
+           
+        
+        
     }
 
     pub fn total_commiter_latest_snp(&mut self) -> Option<usize> {

@@ -144,7 +144,7 @@ async fn health_check() -> Result<Json<Value>, StatusCode> {
     })))
 }
 
-/// GET /origins - Get all origin IDs
+/// GET /origins - Get all origin IDs (filtered to exclude origins with 0 commits)
 async fn get_origins_ids<G>(
     State(state): State<Arc<RwLock<Graph<G>>>>
 ) -> Result<Json<Value>, StatusCode>
@@ -163,7 +163,11 @@ where
     
     match graph.get_origins_mut() {
         Ok(origins) => {
-            let ids: Vec<usize> = origins.iter().map(|o| o.id()).collect();
+            let ids: Vec<usize> = origins
+                .iter_mut()
+                .filter(|o| o.total_commit_latest_snp_read_only().unwrap_or(0) > 0)
+                .map(|o| o.id())
+                .collect();
             Ok(Json(json!({
                 "origin_ids": ids,
                 "count": ids.len()
