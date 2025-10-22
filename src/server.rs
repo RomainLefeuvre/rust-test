@@ -88,8 +88,8 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     let app = server.create_router();
     
     // Start server
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-    info!("Server listening on http://127.0.0.1:3000");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:5000").await?;
+    info!("Server listening on http://127.0.0.1:5000");
     info!("Available endpoints:");
     info!("  GET /health");
     info!("  GET /origins - Get all origin IDs");
