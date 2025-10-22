@@ -1,7 +1,15 @@
 [package]
 name = "swh-test"
 version = "0.0.1"
-edition = "2024"
+edition = "2021"
+
+[[bin]]
+name = "swh-test"
+path = "src/main.rs"
+
+[[bin]]
+name = "swh-server"
+path = "src/main_server.rs"
 
 [features]
 deprecated-binaries = []  # build old, deprecated binaries
@@ -17,4 +25,9 @@ swh-graph = { version = "8.0.10", features = ["serde"] }
 swh-graph-stdlib = "8.0.10"
 indicatif = "0.17"
 rayon = "1.10"
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

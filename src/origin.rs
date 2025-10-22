@@ -128,7 +128,7 @@ where
         // Compute total number of commiters
         self.total_commiter_latest_snp();
         // Compute URL
-        self.get_url();
+        //self.get_url();
     }
     /// Get the internal node ID of this origin
     pub fn id(&self) -> usize {

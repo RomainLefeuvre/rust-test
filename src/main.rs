@@ -11,8 +11,8 @@ mod origin;
 mod utils;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let graph_path = "/mnt/graph_temp/graph";
-    let _base_path: PathBuf = graph_path.into();
+    let graph_path = "/home/sandbox/graph/partial/graph";
+    let base_path: PathBuf = graph_path.into();
       // Get origins (will automatically load if not cached)
 
     //#swh_graph::graph::load_full::<swh_graph::mph::DynMphf>(&base_path).unwrap()
@@ -21,36 +21,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Option 2: Use Bincode serialization (faster, more compact)
     let mut graph = Graph::with_serialization_format(
-        "/home/rlefeuvr/swh/rust-test/data",
+        "./data",
         internal_graph,
         SerializationFormat::Bincode,
     );
 
-    // Print graph statistics
-    let (num_nodes, num_arcs) = graph.stats();
         
     // Get origins
     let origins = graph.get_origins_mut()?;
-    println!("Found {} origins", origins.len());
-    println!(
-        "Graph loaded with {} nodes and {} arcs",
-        num_nodes, num_arcs
-    );
-
-    // Limit to first 1000 origins for testing
-    graph.filter_n_first_origins(1000);
-    graph.save_origins_to_file()?;
-
-    let origins = graph.get_origins_mut()?;
-    println!("Found {} origins", origins.len());
-    println!(
-        "Graph loaded with {} nodes and {} arcs",
-        num_nodes, num_arcs
-    );
 
     // Print the first 10 origins with their struct values
     println!("\nFirst 100 origins:");
-    for (i, origin) in origins.iter_mut().take(100).enumerate() {
+    for (i, origin) in origins.iter_mut().take(10).enumerate() {
         println!("Origin #{} {{", i + 1);
         println!("  id: {},", origin.id);
         println!("  latest_commit_date: {:?},", origin.latest_commit_date);
@@ -61,21 +43,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(); // Empty line for better readability
     }
 
-    //try to get the latest snapshot for all the origins and count missing ones over total
-    let mut missing_count = 0;
-    for origin in origins.iter_mut() {
-        let latest_snapshot = origin.get_latest_snapshot();
-        if latest_snapshot.is_none() {
-            missing_count += 1;
-        }
-    }
-    println!("Origins with no latest snapshot: {}/{}", missing_count, origins.len());
-  
-
-
 
     // Compute all data with progress bar in parallel with rayon
-    println!("\nComputing origin statistics in parallel...");
+    println!("\nComputing origin attribute in parallel...");
    
     let pb = Arc::new(ProgressBar::new(origins.len() as u64));
     pb.set_style(
