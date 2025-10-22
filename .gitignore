@@ -4,3 +4,4 @@ nvd_cve/
 *.json
 *.csv
 target/
+origins.bin
