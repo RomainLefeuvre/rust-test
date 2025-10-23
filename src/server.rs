@@ -1,16 +1,20 @@
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::StatusCode,
-    response::Json,
+    http::{Request, StatusCode},
+    middleware::{self, Next},
+    response::{Json, Response},
     routing::get,
     Router,
 };
+use axum::body::to_bytes;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use swh_graph::{graph::{SwhGraphWithProperties, SwhLabeledForwardGraph, SwhUnidirectionalGraph}, mph::DynMphf, properties};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tracing::{info, error};
+use tower_http::trace::TraceLayer;
+use tracing::{info, error, debug};
 use tracing_subscriber::fmt::init;
 use clap::Parser;
 
@@ -35,6 +39,10 @@ pub struct ServerArgs {
     /// Host to bind the server to
     #[arg(long, default_value = "127.0.0.1")]
     pub host: String,
+
+    /// Enable debug mode to log all HTTP requests
+    #[arg(short, long)]
+    pub log: bool,
 }
 
 // Struct pour encapsuler le serveur avec le type générique
@@ -71,8 +79,8 @@ where
         }
     }
 
-    pub fn create_router(&self) -> Router {
-        Router::new()
+    pub fn create_router(&self, debug_mode: bool) -> Router {
+        let mut router = Router::new()
             .route("/health", get(health_check))
             .route("/origins", get(get_origins_ids::<G>))
             .route("/origins/:id/url", get(get_origin_url::<G>))
@@ -80,7 +88,56 @@ where
             .route("/origins/:id/committer-count", get(get_committer_count::<G>))
             .route("/origins/:id/commit-count", get(get_commit_count::<G>))
             .layer(CorsLayer::permissive())
-            .with_state(self.graph.clone())
+            .with_state(self.graph.clone());
+
+        if debug_mode {
+            router = router.layer(middleware::from_fn(log_requests_and_responses));
+        }
+
+        router
+    }
+}
+
+// Custom middleware to log requests and responses including body content
+async fn log_requests_and_responses(
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let start = std::time::Instant::now();
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    
+    debug!("Request: {} {}", method, uri);
+    
+    let response = next.run(request).await;
+    let latency = start.elapsed();
+    let status = response.status();
+    
+    // Extract the response body to log it
+    let (parts, body) = response.into_parts();
+    
+    // Convert body to bytes
+    match to_bytes(body, usize::MAX).await {
+        Ok(bytes) => {
+            // Try to parse as JSON for pretty logging
+            if let Ok(json_str) = std::str::from_utf8(&bytes) {
+                if let Ok(json_value) = serde_json::from_str::<Value>(json_str) {
+                    debug!("Response: {} ({}ms)", status, latency.as_millis());
+                    debug!("Response Body: {}", serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| "Invalid JSON".to_string()));
+                } else {
+                    debug!("Response: {} ({}ms) - Body: {}", status, latency.as_millis(), json_str);
+                }
+            } else {
+                debug!("Response: {} ({}ms) - Binary body ({} bytes)", status, latency.as_millis(), bytes.len());
+            }
+            
+            // Reconstruct the response with the same body
+            Response::from_parts(parts, Body::from(bytes))
+        }
+        Err(e) => {
+            debug!("Response: {} ({}ms) - Failed to read body: {}", status, latency.as_millis(), e);
+            Response::from_parts(parts, Body::empty())
+        }
     }
 }
 
@@ -89,8 +146,14 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args = ServerArgs::parse();
     
-    // Initialize tracing
-    init();
+    // Initialize tracing with appropriate level based on debug mode
+    if args.log {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .init();
+    } else {
+        init();
+    }
     
     info!("Starting SWH Graph API server...");
     info!("Configuration:");
@@ -98,6 +161,7 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     info!("  Port: {}", args.port);
     info!("  Graph path: {}", args.graph_path);
     info!("  Data path: {}", args.data_path);
+    info!("  Log mode: {}", args.log);
     
     // Load the graph with the provided path
     let internal_graph = SwhUnidirectionalGraph::new(&args.graph_path)?
@@ -116,8 +180,8 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     // Créer le serveur avec le type concret
     let server = GraphServer::new(graph);
     
-    // Create router
-    let app = server.create_router();
+    // Create router with debug mode
+    let app = server.create_router(args.log);
     
     // Start server with the provided host and port
     let bind_address = format!("{}:{}", args.host, args.port);
@@ -130,6 +194,10 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     info!("  GET /origins/:id/latest-commit-date - Get latest commit date");
     info!("  GET /origins/:id/committer-count - Get committer count");
     info!("  GET /origins/:id/commit-count - Get commit count");
+    
+    if args.log {
+        info!("Debug mode enabled - all HTTP requests will be logged");
+    }
     
     axum::serve(listener, app).await?;
     
@@ -164,8 +232,9 @@ where
     match graph.get_origins_mut() {
         Ok(origins) => {
             let ids: Vec<usize> = origins
-                .iter_mut()
-                .filter(|o| o.total_commit_latest_snp_read_only().unwrap_or(0) > 0)
+                .iter()
+                .filter(|o| o.total_commit_latest_snp_read_only().unwrap_or(0) > 0 &&  
+                                        o.get_latest_commit_date_read_only().is_some())
                 .map(|o| o.id())
                 .collect();
             Ok(Json(json!({

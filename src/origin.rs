@@ -126,7 +126,7 @@ where
         // Compute total number of commits
         self.total_commit_latest_snp();
         // Compute total number of commiters
-        self.total_commiter_latest_snp();
+       // self.total_commiter_latest_snp();
         // Compute URL
         //self.get_url();
     }
@@ -228,8 +228,32 @@ where
         return self.latest_commit_date;
     }
 
+    pub fn get_latest_commit_date_read_only(& self) -> Option<usize> {
+        let graph = self.get_graph();
+        if self.latest_commit_date.is_none() {
+            let revisions = self.get_all_latest_snapshots_revisions();
+            let mut max_date: Option<usize> = None;
+            for rev in revisions {
+                let props = graph.properties();
+                let commit_date = props.committer_timestamp(rev);
+                if let Some(date) = commit_date {
+                    if let Some(max) = max_date {
+                        if date > max.try_into().unwrap() {
+                            max_date = Some(date.try_into().unwrap());
+                        }
+                    } else {
+                        max_date = Some(date.try_into().unwrap());
+                    }
+                }
+                return max_date;
+            }
+        }
+        //iterate over get_all_latest_snapshots_revisions and get the max commit date
+        return self.latest_commit_date;
+    }
+
     //Get all head revision of the latest snapshots
-    pub fn get_all_latest_snapshots_revisions(&mut self) -> Vec<NodeId> {
+    pub fn get_all_latest_snapshots_revisions(& self) -> Vec<NodeId> {
         // Return empty vector if there's no latest snapshot    
         let latest_snapshots = match self.get_latest_snapshot() {
             Some(snapshot) => snapshot,
