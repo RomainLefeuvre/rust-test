@@ -5,3 +5,4 @@ nvd_cve/
 *.csv
 target/
 origins.bin
+Cargo.lock
