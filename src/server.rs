@@ -11,6 +11,7 @@ use axum::body::to_bytes;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
+use rayon::prelude::*;
 use swh_graph::{graph::{SwhGraphWithProperties, SwhLabeledForwardGraph, SwhUnidirectionalGraph}, mph::DynMphf, properties};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
@@ -87,6 +88,7 @@ where
             .route("/origins", get(get_origins_ids::<G>))
             .route("/origins/latest-commit-dates", get(get_all_latest_commit_dates::<G>))
             .route("/origins/commit-counts", get(get_all_commit_counts::<G>))
+            .route("/origins/committer-counts", get(get_all_committer_counts::<G>))
             .route("/origins/:id/url", get(get_origin_url::<G>))
             .route("/origins/:id/latest-commit-date", get(get_latest_commit_date::<G>))
             .route("/origins/:id/committer-count", get(get_committer_count::<G>))
@@ -196,6 +198,7 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     info!("  GET /origins - Get all origin IDs");
     info!("  GET /origins/latest-commit-dates - Get latest commit dates for all origins");
     info!("  GET /origins/commit-counts - Get commit counts for all origins");
+    info!("  GET /origins/committer-counts - Get committer counts for all origins");
     info!("  GET /origins/:id/url - Get origin URL");
     info!("  GET /origins/:id/latest-commit-date - Get latest commit date");
     info!("  GET /origins/:id/committer-count - Get committer count");
@@ -251,17 +254,29 @@ where
             
             let mut ids: Vec<usize> = Vec::new();
             
-            // Process origins with progress tracking
-            for origin in origins.iter() {
-                let has_commits = origin.total_commit_latest_snp_read_only().unwrap_or(0) > 0;
-                let has_commit_date = origin.get_latest_commit_date_read_only().is_some();
-                
-                if has_commits && has_commit_date {
-                    ids.push(origin.id());
-                }
-                
-                pb.inc(1);
-            }
+            // Use parallel processing with rayon for filtering
+            let parallel_results: Vec<usize> = origins
+                .par_iter()
+                .enumerate()
+                .filter_map(|(idx, origin)| {
+                    // Update progress every 100 items
+                    if idx % 100 == 0 {
+                        pb.set_position(idx as u64);
+                    }
+                    
+                    let has_commits = origin.total_commit_latest_snp_read_only().unwrap_or(0) > 0;
+                    let has_commit_date = origin.get_latest_commit_date_read_only().is_some();
+                    
+                    if has_commits && has_commit_date {
+                        Some(origin.id())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            ids = parallel_results;
+            pb.set_position(origins.len() as u64);
             
             pb.finish_with_message("✅ Origin filtering completed!");
             info!("Found {} origins with commits and commit dates", ids.len());
@@ -466,20 +481,32 @@ where
             
             let mut result: HashMap<String, String> = HashMap::new();
             
-            for (idx, origin) in origins.iter_mut().enumerate() {
-                if let Some(latest_commit_date) = origin.get_latest_commit_date() {
-                    result.insert(origin.id().to_string(), latest_commit_date.to_string());
-                }
-                
-                pb.set_position((idx + 1) as u64);
-                
-                // Update message with current progress
-                if idx % 100 == 0 || idx == total_origins - 1 {
-                    pb.set_message(format!("Processed {}/{} origins", idx + 1, total_origins));
-                }
+            // Use parallel processing with rayon
+            let parallel_results: Vec<(String, String)> = origins
+                .par_iter_mut()
+                .enumerate()
+                .filter_map(|(idx, origin)| {
+                    // Update progress every 100 items
+                    if idx % 100 == 0 {
+                        pb.set_position(idx as u64);
+                    }
+                    
+                    if let Some(latest_commit_date) = origin.get_latest_commit_date() {
+                        Some((origin.id().to_string(), latest_commit_date.to_string()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // Convert results to HashMap
+            for (id, date) in parallel_results {
+                result.insert(id, date);
             }
             
-            pb.finish_with_message(format!("✓ Completed processing {} origins with latest commit dates", result.len()));
+            pb.set_position(total_origins as u64);
+            
+            pb.finish_with_message(format!("✓ Completed processing {} latest commit dates", result.len()));
             
             info!("Successfully retrieved latest commit dates for {} out of {} origins", result.len(), total_origins);
             Ok(Json(result))
@@ -527,22 +554,107 @@ where
             
             let mut result: HashMap<String, String> = HashMap::new();
             
-            for (idx, origin) in origins.iter_mut().enumerate() {
-                if let Some(commit_count) = origin.total_commit_latest_snp() {
-                    result.insert(origin.id().to_string(), commit_count.to_string());
-                }
-                
-                pb.set_position((idx + 1) as u64);
-                
-                // Update message with current progress
-                if idx % 100 == 0 || idx == total_origins - 1 {
-                    pb.set_message(format!("Processed {}/{} origins", idx + 1, total_origins));
-                }
+            // Use parallel processing with rayon
+            let parallel_results: Vec<(String, String)> = origins
+                .par_iter_mut()
+                .enumerate()
+                .filter_map(|(idx, origin)| {
+                    // Update progress every 100 items
+                    if idx % 100 == 0 {
+                        pb.set_position(idx as u64);
+                    }
+                    
+                    if let Some(commit_count) = origin.total_commit_latest_snp() {
+                        Some((origin.id().to_string(), commit_count.to_string()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // Convert results to HashMap
+            for (id, count) in parallel_results {
+                result.insert(id, count);
             }
             
-            pb.finish_with_message(format!("✓ Completed processing {} origins with commit counts", result.len()));
+            pb.set_position(total_origins as u64);
+            
+            pb.finish_with_message(format!("✓ Completed processing {} get_all_commit_counts", result.len()));
             
             info!("Successfully retrieved commit counts for {} out of {} origins", result.len(), total_origins);
+            Ok(Json(result))
+        }
+        Err(e) => {
+            error!("Failed to get origins: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// GET /origins/committer-counts - Get committer counts for all origins
+async fn get_all_committer_counts<G>(
+    State(state): State<Arc<RwLock<Graph<G>>>>
+) -> Result<Json<HashMap<String, String>>, StatusCode>
+where
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync + 'static,
+{
+    info!("Fetching committer counts for all origins");
+    
+    let mut graph = state.write().await;
+    
+    match graph.get_origins_mut() {
+        Ok(origins) => {
+            let total_origins = origins.len();
+            
+            // Create progress bar for processing all origins
+            let pb = StdArc::new(ProgressBar::new(total_origins as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("  {spinner:.cyan} [{elapsed_precise}] [{bar:30.cyan/blue}] {pos}/{len} origins ({percent}%) {msg}")
+                    .unwrap()
+                    .progress_chars("=>-")
+                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+            );
+            pb.set_message("Processing committer counts...");
+            
+            let mut result: HashMap<String, String> = HashMap::new();
+            
+            // Use parallel processing with rayon
+            let parallel_results: Vec<(String, String)> = origins
+                .par_iter_mut()
+                .enumerate()
+                .filter_map(|(idx, origin)| {
+                    // Update progress every 100 items
+                    if idx % 100 == 0 {
+                        pb.set_position(idx as u64);
+                    }
+                    
+                    if let Some(committer_count) = origin.total_commiter_latest_snp() {
+                        Some((origin.id().to_string(), committer_count.to_string()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // Convert results to HashMap
+            for (id, count) in parallel_results {
+                result.insert(id, count);
+            }
+            
+            pb.set_position(total_origins as u64);
+            
+            pb.finish_with_message(format!("✓ Completed processing {}  committer counts", result.len()));
+            
+            info!("Successfully retrieved committer counts for {} out of {} origins", result.len(), total_origins);
             Ok(Json(result))
         }
         Err(e) => {
