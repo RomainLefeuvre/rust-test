@@ -9,6 +9,7 @@ use axum::{
 };
 use axum::body::to_bytes;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 use swh_graph::{graph::{SwhGraphWithProperties, SwhLabeledForwardGraph, SwhUnidirectionalGraph}, mph::DynMphf, properties};
 use tokio::sync::RwLock;
@@ -17,7 +18,8 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, error, debug};
 use tracing_subscriber::fmt::init;
 use clap::Parser;
-
+use indicatif::{ProgressBar, ProgressStyle};
+use std::sync::Arc as StdArc;
 use crate::graph::{Graph, SerializationFormat};
 
 /// CLI arguments for the SWH Graph API server
@@ -83,6 +85,8 @@ where
         let mut router = Router::new()
             .route("/health", get(health_check))
             .route("/origins", get(get_origins_ids::<G>))
+            .route("/origins/latest-commit-dates", get(get_all_latest_commit_dates::<G>))
+            .route("/origins/commit-counts", get(get_all_commit_counts::<G>))
             .route("/origins/:id/url", get(get_origin_url::<G>))
             .route("/origins/:id/latest-commit-date", get(get_latest_commit_date::<G>))
             .route("/origins/:id/committer-count", get(get_committer_count::<G>))
@@ -190,6 +194,8 @@ pub async fn create_server() -> Result<(), Box<dyn std::error::Error>> {
     info!("Available endpoints:");
     info!("  GET /health - Health check");
     info!("  GET /origins - Get all origin IDs");
+    info!("  GET /origins/latest-commit-dates - Get latest commit dates for all origins");
+    info!("  GET /origins/commit-counts - Get commit counts for all origins");
     info!("  GET /origins/:id/url - Get origin URL");
     info!("  GET /origins/:id/latest-commit-date - Get latest commit date");
     info!("  GET /origins/:id/committer-count - Get committer count");
@@ -231,12 +237,35 @@ where
     
     match graph.get_origins_mut() {
         Ok(origins) => {
-            let ids: Vec<usize> = origins
-                .iter()
-                .filter(|o| o.total_commit_latest_snp_read_only().unwrap_or(0) > 0 &&  
-                                        o.get_latest_commit_date_read_only().is_some())
-                .map(|o| o.id())
-                .collect();
+            info!("Processing {} origins to filter by commit count...", origins.len());
+            
+            // Create progress bar
+            let pb = StdArc::new(ProgressBar::new(origins.len() as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) | ETA: {eta} | Rate: {per_sec}")
+                    .unwrap()
+                    .progress_chars("█▉▊▋▌▍▎▏  ")
+            );
+            pb.set_message("Filtering origins");
+            
+            let mut ids: Vec<usize> = Vec::new();
+            
+            // Process origins with progress tracking
+            for origin in origins.iter() {
+                let has_commits = origin.total_commit_latest_snp_read_only().unwrap_or(0) > 0;
+                let has_commit_date = origin.get_latest_commit_date_read_only().is_some();
+                
+                if has_commits && has_commit_date {
+                    ids.push(origin.id());
+                }
+                
+                pb.inc(1);
+            }
+            
+            pb.finish_with_message("✅ Origin filtering completed!");
+            info!("Found {} origins with commits and commit dates", ids.len());
+            
             Ok(Json(json!({
                 "origin_ids": ids,
                 "count": ids.len()
@@ -393,6 +422,128 @@ where
                 error!("Origin with id {} not found", id);
                 Err(StatusCode::NOT_FOUND)
             }
+        }
+        Err(e) => {
+            error!("Failed to get origins: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// GET /origins/latest-commit-dates - Get latest commit dates for all origins
+async fn get_all_latest_commit_dates<G>(
+    State(state): State<Arc<RwLock<Graph<G>>>>
+) -> Result<Json<HashMap<String, String>>, StatusCode>
+where
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync + 'static,
+{
+    info!("Fetching latest commit dates for all origins");
+    
+    let mut graph = state.write().await;
+    
+    match graph.get_origins_mut() {
+        Ok(origins) => {
+            let total_origins = origins.len();
+            
+            // Create progress bar for processing all origins
+            let pb = StdArc::new(ProgressBar::new(total_origins as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("  {spinner:.cyan} [{elapsed_precise}] [{bar:30.cyan/blue}] {pos}/{len} origins ({percent}%) {msg}")
+                    .unwrap()
+                    .progress_chars("=>-")
+                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+            );
+            pb.set_message("Processing latest commit dates...");
+            
+            let mut result: HashMap<String, String> = HashMap::new();
+            
+            for (idx, origin) in origins.iter_mut().enumerate() {
+                if let Some(latest_commit_date) = origin.get_latest_commit_date() {
+                    result.insert(origin.id().to_string(), latest_commit_date.to_string());
+                }
+                
+                pb.set_position((idx + 1) as u64);
+                
+                // Update message with current progress
+                if idx % 100 == 0 || idx == total_origins - 1 {
+                    pb.set_message(format!("Processed {}/{} origins", idx + 1, total_origins));
+                }
+            }
+            
+            pb.finish_with_message(format!("✓ Completed processing {} origins with latest commit dates", result.len()));
+            
+            info!("Successfully retrieved latest commit dates for {} out of {} origins", result.len(), total_origins);
+            Ok(Json(result))
+        }
+        Err(e) => {
+            error!("Failed to get origins: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// GET /origins/commit-counts - Get commit counts for all origins
+async fn get_all_commit_counts<G>(
+    State(state): State<Arc<RwLock<Graph<G>>>>
+) -> Result<Json<HashMap<String, String>>, StatusCode>
+where
+    G: SwhLabeledForwardGraph 
+    + SwhGraphWithProperties<
+        Maps: properties::Maps,
+        Timestamps: properties::Timestamps,
+        Persons: properties::Persons,
+        Contents: properties::Contents,
+        Strings: properties::Strings,
+        LabelNames: properties::LabelNames,
+    > + Send + Sync + 'static,
+{
+    info!("Fetching commit counts for all origins");
+    
+    let mut graph = state.write().await;
+    
+    match graph.get_origins_mut() {
+        Ok(origins) => {
+            let total_origins = origins.len();
+            
+            // Create progress bar for processing all origins
+            let pb = StdArc::new(ProgressBar::new(total_origins as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("  {spinner:.cyan} [{elapsed_precise}] [{bar:30.cyan/blue}] {pos}/{len} origins ({percent}%) {msg}")
+                    .unwrap()
+                    .progress_chars("=>-")
+                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+            );
+            pb.set_message("Processing commit counts...");
+            
+            let mut result: HashMap<String, String> = HashMap::new();
+            
+            for (idx, origin) in origins.iter_mut().enumerate() {
+                if let Some(commit_count) = origin.total_commit_latest_snp() {
+                    result.insert(origin.id().to_string(), commit_count.to_string());
+                }
+                
+                pb.set_position((idx + 1) as u64);
+                
+                // Update message with current progress
+                if idx % 100 == 0 || idx == total_origins - 1 {
+                    pb.set_message(format!("Processed {}/{} origins", idx + 1, total_origins));
+                }
+            }
+            
+            pb.finish_with_message(format!("✓ Completed processing {} origins with commit counts", result.len()));
+            
+            info!("Successfully retrieved commit counts for {} out of {} origins", result.len(), total_origins);
+            Ok(Json(result))
         }
         Err(e) => {
             error!("Failed to get origins: {}", e);
