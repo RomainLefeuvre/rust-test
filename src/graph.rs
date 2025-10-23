@@ -9,6 +9,7 @@ use crate::origin::{Origin, OriginData};
 use serde_json;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
+use rand::seq::SliceRandom;
 
 #[derive(Clone, Copy, Debug)]
 pub enum SerializationFormat {
@@ -115,14 +116,18 @@ where
                     let _ = fs::remove_file(&self.origins_cache_file);
                     // Recompute origins
                     self.origins = Some(self.compute_origins());
-                    let _ = self.save_origins_to_file();
+                     if let Err(e) = self.save_origins_to_file() {
+                eprintln!("Failed to save origins to cache: {}", e);
+            }
                 }
             }
         } else {
             println!("Computing origins and caching to ({:?}): {:?}", 
                      self.serialization_format, self.origins_cache_file);
             self.origins= Some(self.compute_origins());
-            let _ = self.save_origins_to_file();
+            if let Err(e) = self.save_origins_to_file() {
+                eprintln!("Failed to save origins to cache: {}", e);
+            }
         }
     }
     
@@ -192,6 +197,64 @@ where
                         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                 }
             }
+            
+        } else {
+            Ok(())
+        }
+    }
+    
+    /// Save n random origins to file instead of all origins
+    /// Useful for testing and reducing file sizes
+    pub fn save_n_random_origins_to_file(&self, n: usize) -> Result<(), std::io::Error> {
+        let mut cache_file = self.origins_cache_file.clone();
+        
+        // Modify filename to include the number of origins
+        let base_name = cache_file.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("origins");
+        let extension = cache_file.extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("bin");
+        
+        let new_filename = format!("{}_random_{}.{}", base_name, n, extension);
+        cache_file.set_file_name(new_filename);
+        
+        let file = File::create(&cache_file)?;
+        let writer = BufWriter::new(file);
+        
+        // Convert Origins to OriginData for serialization
+        if let Some(origins) = &self.origins {
+            // Select n random origins
+            let mut rng = rand::thread_rng();
+            let selected_origins: Vec<&Origin<G>> = origins
+                .choose_multiple(&mut rng, n.min(origins.len()))
+                .collect();
+            
+            let origins_data: Vec<OriginData> = selected_origins.iter()
+                .map(|origin| OriginData {
+                    id: origin.id,
+                    url: origin.url.clone(),
+                    latest_commit_date: origin.latest_commit_date,
+                    number_of_commits: origin.number_of_commits,
+                    number_of_commiters: origin.number_of_commiters,
+                })
+                .collect();
+            
+            println!("Saving {} random origins out of {} total to: {:?}", 
+                     origins_data.len(), origins.len(), cache_file);
+            
+            // Serialize the origins data using the chosen format
+            match self.serialization_format {
+                SerializationFormat::Json => {
+                    serde_json::to_writer_pretty(writer, &origins_data)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                }
+                SerializationFormat::Bincode => {
+                    bincode::serialize_into(writer, &origins_data)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                }
+            }
+            
         } else {
             Ok(())
         }

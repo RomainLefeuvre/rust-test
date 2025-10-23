@@ -126,7 +126,7 @@ where
         // Compute total number of commits
         self.total_commit_latest_snp();
         // Compute total number of commiters
-       // self.total_commiter_latest_snp();
+        self.total_commiter_latest_snp();
         // Compute URL
         //self.get_url();
     }
@@ -213,16 +213,19 @@ where
                 let props = graph.properties();
                 let commit_date = props.committer_timestamp(rev);
                 if let Some(date) = commit_date {
-                    if let Some(max) = max_date {
-                        if date > max.try_into().unwrap() {
-                            max_date = Some(date.try_into().unwrap());
+                    // Safely convert timestamp to usize, skip if conversion fails
+                    if let Ok(date_usize) = date.try_into() {
+                        if let Some(max) = max_date {
+                            if date_usize > max {
+                                max_date = Some(date_usize);
+                            }
+                        } else {
+                            max_date = Some(date_usize);
                         }
-                    } else {
-                        max_date = Some(date.try_into().unwrap());
                     }
                 }
-                self.latest_commit_date = max_date;
             }
+            self.latest_commit_date = max_date;
         }
         //iterate over get_all_latest_snapshots_revisions and get the max commit date
         return self.latest_commit_date;
@@ -237,16 +240,19 @@ where
                 let props = graph.properties();
                 let commit_date = props.committer_timestamp(rev);
                 if let Some(date) = commit_date {
-                    if let Some(max) = max_date {
-                        if date > max.try_into().unwrap() {
-                            max_date = Some(date.try_into().unwrap());
+                    // Safely convert timestamp to usize, skip if conversion fails
+                    if let Ok(date_usize) = date.try_into() {
+                        if let Some(max) = max_date {
+                            if date_usize > max {
+                                max_date = Some(date_usize);
+                            }
+                        } else {
+                            max_date = Some(date_usize);
                         }
-                    } else {
-                        max_date = Some(date.try_into().unwrap());
                     }
                 }
-                return max_date;
             }
+            return max_date;
         }
         //iterate over get_all_latest_snapshots_revisions and get the max commit date
         return self.latest_commit_date;

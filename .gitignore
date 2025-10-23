@@ -4,5 +4,5 @@ nvd_cve/
 *.json
 *.csv
 target/
-origins.bin
+origins_*
 Cargo.lock
