@@ -240,19 +240,16 @@ where
                 let props = graph.properties();
                 let commit_date = props.committer_timestamp(rev);
                 if let Some(date) = commit_date {
-                    // Safely convert timestamp to usize, skip if conversion fails
-                    if let Ok(date_usize) = date.try_into() {
-                        if let Some(max) = max_date {
-                            if date_usize > max {
-                                max_date = Some(date_usize);
-                            }
-                        } else {
-                            max_date = Some(date_usize);
+                    if let Some(max) = max_date {
+                        if date > max.try_into().unwrap() {
+                            max_date = Some(date.try_into().unwrap());
                         }
+                    } else {
+                        max_date = Some(date.try_into().unwrap());
                     }
                 }
+                return max_date;
             }
-            return max_date;
         }
         //iterate over get_all_latest_snapshots_revisions and get the max commit date
         return self.latest_commit_date;
