@@ -9,7 +9,7 @@ use crate::origin::{Origin, OriginData};
 use serde_json;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
-use rand::seq::SliceRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 
 #[derive(Clone, Copy, Debug)]
 pub enum SerializationFormat {
