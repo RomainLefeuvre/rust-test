@@ -25,11 +25,11 @@ swh-graph = { version = "8.0.10", features = ["serde"] }
 swh-graph-stdlib = "8.0.10"
 indicatif = "0.17"
 rayon = "1.10"
-rand = "0.8"
 axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.4", features = ["derive"] }
+rand = "0.9.2"
 
